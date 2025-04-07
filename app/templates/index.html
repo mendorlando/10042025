@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algoritmo de Dijkstra</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.24.0/cytoscape.min.js"></script>
+    <style>
+        /* Asegurar que el contenedor del grafo tenga dimensiones visibles */
+        .graph-container {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Algoritmo de Dijkstra</h1>
+
+        <form id="dijkstra-form" class="form-container">
+            <div class="form-group">
+                <label for="nodes">Nodos (separados por coma):</label>
+                <input type="text" id="nodes" name="nodes" placeholder="A,B,C,D" required>
+            </div>
+
+            <div class="form-group">
+                <label for="edges">Aristas (formato: Nodo1,Nodo2,Peso, separados por comas):</label>
+                <input type="text" id="edges" name="edges" placeholder="A,B,10,B,C,20,A,C,30" required>
+            </div>
+
+            <div class="form-group">
+                <label for="start">Nodo de inicio:</label>
+                <input type="text" id="start" name="start" placeholder="A" required>
+            </div>
+
+            <div class="form-group">
+                <label for="end">Nodo de destino:</label>
+                <input type="text" id="end" name="end" placeholder="C" required>
+            </div>
+
+            <button type="submit" class="btn">Ejecutar Dijkstra</button>
+        </form>
+
+        <div id="result" class="result-container">
+            <!-- Los resultados del algoritmo se mostrarán aquí -->
+        </div>
+
+        <div id="graph-container" class="graph-container"></div>
+    </div>
+
+    <script>
+        document.getElementById('dijkstra-form').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevenir el comportamiento por defecto del formulario
+
+            const nodes = document.getElementById('nodes').value.split(',');
+            const edges = document.getElementById('edges').value.split(',').reduce((acc, _, index, array) => {
+                if (index % 3 === 0) {
+                    acc.push([array[index], array[index + 1], parseInt(array[index + 2])]);
+                }
+                return acc;
+            }, []);
+            const start = document.getElementById('start').value;
+            const end = document.getElementById('end').value;
+
+            const data = { nodes, edges, start, end };
+
+            fetch('/dijkstra', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('result').innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                } else {
+                    document.getElementById('result').innerHTML = `<p class="success">Ruta más corta: ${data.shortest_path.join(' -> ')}</p>
+                                                                   <p class="success">Longitud del camino: ${data.path_length}</p>`;
+                    drawGraph(nodes, edges, data.shortest_path);
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').innerHTML = `<p class="error">Error al calcular el camino: ${error}</p>`;
+            });
+        });
+
+        function drawGraph(nodes, edges, shortestPath) {
+            const container = document.getElementById('graph-container');
+            if (!container) {
+                console.error('El contenedor del grafo no se encontró.');
+                return;
+            }
+
+            const cy = cytoscape({
+                container: container,
+                elements: [
+                    ...nodes.map(node => ({ data: { id: node } })),
+                    ...edges.map(edge => ({
+                        data: { id: `${edge[0]}-${edge[1]}`, source: edge[0], target: edge[1], weight: edge[2] }
+                    }))
+                ],
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'label': 'data(id)',
+                            'background-color': '#4CAF50',
+                            'color': '#fff',
+                            'text-valign': 'center',
+                            'text-halign': 'center'
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'label': 'data(weight)',
+                            'line-color': '#ccc',
+                            'target-arrow-color': '#ccc',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier'
+                        }
+                    },
+                    {
+                        selector: '.highlighted',
+                        style: {
+                            'line-color': '#f00',
+                            'target-arrow-color': '#f00',
+                            'width': 4
+                        }
+                    },
+                    {
+                        selector: '.highlighted-node',
+                        style: {
+                            'background-color': '#f00',
+                            'color': '#fff'
+                        }
+                    }
+                ],
+                layout: {
+                    name: 'grid',
+                    rows: Math.ceil(Math.sqrt(nodes.length)) // Ajustar el diseño según el número de nodos
+                }
+            });
+
+            // Resaltar nodos y aristas del camino más corto
+            shortestPath.forEach(node => {
+                const element = cy.getElementById(node);
+                if (element) {
+                    element.addClass('highlighted-node');
+                }
+            });
+
+            for (let i = 0; i < shortestPath.length - 1; i++) {
+                const edgeId = `${shortestPath[i]}-${shortestPath[i + 1]}`;
+                const edge = cy.getElementById(edgeId);
+                if (edge) {
+                    edge.addClass('highlighted');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
